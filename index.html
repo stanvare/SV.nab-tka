@@ -452,11 +452,24 @@ window.onload = () => {
   document.getElementById("f-cislo").value = "F-"+new Date().getFullYear()+"-001";
   const spl = new Date(); spl.setDate(spl.getDate()+14);
   document.getElementById("f-splatnost").value = spl.toISOString().split("T")[0];
+
+  // Načti uložený stav
+  loadState();
+
   renderPicker("nabidka");
   renderPicker("faktura");
   renderCenikEditor();
   renderOut("nabidka");
   renderOut("faktura");
+
+  // Auto-save při změně formulářových polí
+  ["n-cislo","n-datum","n-jmeno","n-adresa","n-popis",
+   "f-cislo","f-datum","f-jmeno","f-adresa","f-popis",
+   "f-splatnost","f-platba","f-ico","f-ucet"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", saveState);
+    if (el) el.addEventListener("change", saveState);
+  });
 };
 
 // ======================================================
@@ -472,13 +485,17 @@ function showPage(name, el) {
 // ======================================================
 // PICKER (Nabídka / Faktura)
 // ======================================================
+function esc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 function renderPicker(docKey) {
   const prefix = docKey === "nabidka" ? "np" : "fp";
   const container = document.getElementById(docKey+"-picker");
   // Category tabs
   let tabsHtml = `<div class="stabs">`;
   CENIK.forEach((cat, ci) => {
-    tabsHtml += `<button class="stab ${ci===0?"active":""}" onclick="switchPickerCat('${docKey}',${ci},this)">${cat.label}</button>`;
+    tabsHtml += `<button class="stab ${ci===0?"active":""}" onclick="switchPickerCat('${docKey}',${ci},this)">${esc(cat.label)}</button>`;
   });
   tabsHtml += `</div>`;
   // Sections
@@ -488,12 +505,12 @@ function renderPicker(docKey) {
     cat.items.forEach((item, ii) => {
       if (item.sub !== undefined) {
         const cls = item.demo ? "red" : "";
-        secsHtml += `<div class="subcat ${cls}">${item.sub}</div>`;
+        secsHtml += `<div class="subcat ${cls}">${esc(item.sub)}</div>`;
       } else {
         const demoClass = item.demo ? " demolition" : "";
         secsHtml += `<div class="prow${demoClass}">
-          <span class="pname">${item.name}</span>
-          <span class="punit">${item.unit}</span>
+          <span class="pname">${esc(item.name)}</span>
+          <span class="punit">${esc(item.unit)}</span>
           <span class="ppriceshow">${item.price} Kč</span>
           <div class="ctr">
             <button class="cbtn minus" onclick="chQ('${prefix}',${ci},${ii},-1)">−</button>
@@ -504,7 +521,6 @@ function renderPicker(docKey) {
         </div>`;
       }
     });
-    // Custom item at bottom of each cat
     secsHtml += `<div class="vlastni-row">
       <input type="text" id="${prefix}-vn-${ci}" placeholder="Vlastní položka...">
       <input type="number" id="${prefix}-vc-${ci}" placeholder="Kč" min="0">
@@ -557,8 +573,53 @@ function addVlastni(docKey, prefix, ci) {
 }
 
 // ======================================================
-// OUTPUT LIST
+// LOCALSTORAGE – uložení stavu
 // ======================================================
+function saveState() {
+  try {
+    const state = {
+      docs,
+      nCislo: document.getElementById("n-cislo").value,
+      nDatum: document.getElementById("n-datum").value,
+      nJmeno: document.getElementById("n-jmeno").value,
+      nAdresa: document.getElementById("n-adresa").value,
+      nPopis: document.getElementById("n-popis").value,
+      fCislo: document.getElementById("f-cislo").value,
+      fDatum: document.getElementById("f-datum").value,
+      fJmeno: document.getElementById("f-jmeno").value,
+      fAdresa: document.getElementById("f-adresa").value,
+      fPopis: document.getElementById("f-popis").value,
+      fSplatnost: document.getElementById("f-splatnost").value,
+      fPlatba: document.getElementById("f-platba").value,
+      fIco: document.getElementById("f-ico").value,
+      fUcet: document.getElementById("f-ucet").value,
+      uid
+    };
+    localStorage.setItem("sv_nabidka_state", JSON.stringify(state));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem("sv_nabidka_state");
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.docs) docs = s.docs;
+    if (s.uid) uid = s.uid;
+    const fields = [
+      ["n-cislo","nCislo"],["n-datum","nDatum"],["n-jmeno","nJmeno"],
+      ["n-adresa","nAdresa"],["n-popis","nPopis"],
+      ["f-cislo","fCislo"],["f-datum","fDatum"],["f-jmeno","fJmeno"],
+      ["f-adresa","fAdresa"],["f-popis","fPopis"],
+      ["f-splatnost","fSplatnost"],["f-platba","fPlatba"],
+      ["f-ico","fIco"],["f-ucet","fUcet"]
+    ];
+    fields.forEach(([id,key]) => {
+      const el = document.getElementById(id);
+      if (el && s[key] !== undefined) el.value = s[key];
+    });
+  } catch(e) {}
+}
 function renderOut(docKey) {
   const isN = docKey === "nabidka";
   const outEl = document.getElementById(isN?"n-out":"f-out");
@@ -566,7 +627,8 @@ function renderOut(docKey) {
   const items = docs[docKey];
   if (!items.length) {
     outEl.innerHTML = `<div class="nempty">Přidej položky z ceníku vlevo.</div>`;
-    sumaEl.textContent = "0 Kč"; return;
+    sumaEl.textContent = "0 Kč";
+    saveState(); return;
   }
   let html = "", suma = 0;
   items.forEach(it => {
@@ -574,8 +636,8 @@ function renderOut(docKey) {
     const color = it.demo ? "color:var(--orange)" : "";
     html += `<div class="nitem">
       <div class="ninfo">
-        <div class="nname" style="${color}">${it.name}</div>
-        <div class="nsub">${it.qty} ${it.unit} × ${it.price} Kč</div>
+        <div class="nname" style="${color}">${esc(it.name)}</div>
+        <div class="nsub">${it.qty} ${esc(it.unit)} × ${it.price} Kč</div>
       </div>
       <div class="ncena">${it.total.toLocaleString("cs-CZ")} Kč</div>
       <button class="ndel" onclick="removeItem('${docKey}',${it.id})">×</button>
@@ -583,6 +645,7 @@ function renderOut(docKey) {
   });
   outEl.innerHTML = html;
   sumaEl.textContent = suma.toLocaleString("cs-CZ") + " Kč";
+  saveState();
 }
 
 function removeItem(docKey, id) {
@@ -591,16 +654,17 @@ function removeItem(docKey, id) {
 }
 function clearDoc(docKey) {
   if (!docs[docKey].length) return;
-  if (confirm("Opravdu vymazat?")) { docs[docKey] = []; renderOut(docKey); }
+  if (confirm("Opravdu vymazat?")) { docs[docKey] = []; renderOut(docKey); saveState(); }
 }
 function prevestDoFaktury() {
   if (!docs.nabidka.length) { toast("⚠ Nabídka je prázdná!", true); return; }
   docs.faktura = docs.nabidka.map(x => ({...x, id:uid++}));
   document.getElementById("f-jmeno").value = document.getElementById("n-jmeno").value;
   document.getElementById("f-adresa").value = document.getElementById("n-adresa").value;
-  document.getElementById("f-popis").value = "Fakturuji za práce dle nabídky č. "+document.getElementById("n-cislo").value;
+  document.getElementById("f-popis").value = "Fakturuji za provedene prace dle nabidky c. "+document.getElementById("n-cislo").value;
   document.getElementById("f-cislo").value = document.getElementById("n-cislo").value.replace(/^N-/,"F-");
   renderOut("faktura");
+  saveState();
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".ttab").forEach(b => b.classList.remove("active"));
   document.getElementById("page-faktura").classList.add("active");
@@ -928,10 +992,11 @@ function genPDF(typ) {
     "Faktura je splatna do "+splCZ+" ("+platba+").",
     "Dodavatel je neplatcem DPH - uvedena cena je konecna.",
     "Ceny zahrnuji praci i material dle cenove nabidky.",
+    "Odberatel souhlasi s moznym zvysenim ceny pri zjisteni viceprac.",
   ] : [
     "Nabidka je platna 30 dni od data vystaveni (do "+platCZ+").",
-    "Ceny zahrnuji praci i material. Svarovani neni soucasti nabidky.",
-    "Viceprace budou dohodnuty predem pisemne.",
+    "Ceny zahrnuji praci i material.",
+    "Viceprace: odberatel souhlasi s tim, ze pri zjisteni skrytych nebo viceprac muze dojit ke zvyseni ceny.",
   ];
   doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,110,130);
   info.forEach(l => { doc.text(l, L, y); y+=5; });
