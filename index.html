@@ -702,32 +702,72 @@ function toast(msg, warn=false) {
 }
 
 // ======================================================
-// PDF
+// PDF – opravená česká diakritika + layout dle vzoru
 // ======================================================
-function drawHdr(doc, cislo, datum, typ, PW, L, R) {
-  const isF = typ === "faktura";
-  doc.setFillColor(isF?26:10, isF?110:36, isF?62:99);
-  doc.rect(0,0,PW,34,"F");
-  doc.setFillColor(232,71,10); doc.rect(0,34,PW,3,"F");
-  // Logo
-  try { doc.addImage("data:image/jpeg;base64,"+LOGO_B64,"JPEG",3,2,28,30); } catch(e) {}
-  // Name
-  doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(255,255,255);
-  doc.text("Stanislav Vařeka", 35, 12);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(168,200,232);
-  doc.text("Instalatér · Topenář  ·  Zahradní 2722/33, 787 01 Šumperk", 35, 19);
-  doc.text("IČO: 06411401  ·  Neplátce DPH  ·  Olomoucký kraj", 35, 26);
-  // Title
-  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(255,255,255);
-  doc.text(isF?"FAKTURA":"CENOVÁ NABÍDKA", R, 12, {align:"right"});
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(168,200,232);
-  doc.text("č. "+cislo, R, 21, {align:"right"});
-  doc.text("Datum: "+datum, R, 29, {align:"right"});
+
+// Převod diakritiky pro jsPDF helvetica font
+function cz(s) {
+  if (!s) return "";
+  return String(s)
+    .replace(/á/g,"a").replace(/Á/g,"A")
+    .replace(/č/g,"c").replace(/Č/g,"C")
+    .replace(/ď/g,"d").replace(/Ď/g,"D")
+    .replace(/é/g,"e").replace(/É/g,"E")
+    .replace(/ě/g,"e").replace(/Ě/g,"E")
+    .replace(/í/g,"i").replace(/Í/g,"I")
+    .replace(/ň/g,"n").replace(/Ň/g,"N")
+    .replace(/ó/g,"o").replace(/Ó/g,"O")
+    .replace(/ř/g,"r").replace(/Ř/g,"R")
+    .replace(/š/g,"s").replace(/Š/g,"S")
+    .replace(/ť/g,"t").replace(/Ť/g,"T")
+    .replace(/ú/g,"u").replace(/ů/g,"u").replace(/Ú/g,"U").replace(/Ů/g,"U")
+    .replace(/ý/g,"y").replace(/Ý/g,"Y")
+    .replace(/ž/g,"z").replace(/Ž/g,"Z")
+    .replace(/–/g,"-").replace(/—/g,"-")
+    .replace(/·/g,"·");
 }
-function drawFtr(doc, PW, PH) {
-  doc.setFillColor(10,36,99); doc.rect(0,PH-11,PW,11,"F");
-  doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(168,200,232);
-  doc.text("Stanislav Vařeka  ·  IČO 06411401  ·  Neplátce DPH  ·  Zahradní 2722/33, 787 01 Šumperk",PW/2,PH-5,{align:"center"});
+
+function czSplit(doc, text, maxW) {
+  return doc.splitTextToSize(cz(text), maxW);
+}
+
+function pdfHdr(doc, cislo, datum, typ, PW, L, R) {
+  const isF = typ === "faktura";
+  // Horní bílá oblast s logem
+  doc.setFillColor(255,255,255);
+  doc.rect(0,0,PW,38,"F");
+  // Modrá linka dole pod hlavičkou
+  doc.setFillColor(10,36,99);
+  doc.rect(0,38,PW,1.5,"F");
+
+  // Logo vlevo
+  try { doc.addImage("data:image/jpeg;base64,"+LOGO_B64,"JPEG",L,3,28,32); } catch(e) {}
+
+  // Název firmy vedle loga
+  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(10,36,99);
+  doc.text("Stanislav Vareka", L+32, 13);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(80,90,110);
+  doc.text("Instalater & Topenar", L+32, 20);
+  doc.setFontSize(7); doc.setTextColor(120,130,150);
+  doc.text("Zahradni 2722/33, 787 01 Sumperk", L+32, 26);
+  doc.text("ICO: 06411401  |  Neplatce DPH", L+32, 32);
+
+  // Název dokumentu vpravo
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(10,36,99);
+  doc.text(isF ? "FAKTURA" : "CENOVA NABIDKA", R, 16, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(100,110,130);
+  doc.text(cz("c. ")+cislo, R, 24, {align:"right"});
+  doc.text(cz("Datum: ")+datum, R, 31, {align:"right"});
+}
+
+function pdfFtr(doc, PW, PH, pageNum) {
+  doc.setFillColor(245,247,252);
+  doc.rect(0,PH-12,PW,12,"F");
+  doc.setDrawColor(200,210,230); doc.setLineWidth(0.3);
+  doc.line(0,PH-12,PW,PH-12);
+  doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(130,140,160);
+  doc.text("Stanislav Vareka  |  ICO 06411401  |  Neplatce DPH  |  Zahradni 2722/33, 787 01 Sumperk",PW/2,PH-6,{align:"center"});
+  if (pageNum > 1) doc.text("Strana "+pageNum, R, PH-6, {align:"right"});
 }
 
 function genPDF(typ) {
@@ -736,152 +776,182 @@ function genPDF(typ) {
   const isF = typ === "faktura";
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  const PW=210, PH=297, L=13, R=197, W=R-L;
-  let y=0;
+  const PW=210, PH=297, L=14, R=196, W=R-L;
+  let y=0, pageNum=1;
 
   const cislo  = document.getElementById(isF?"f-cislo":"n-cislo").value||"001";
   const dRaw   = document.getElementById(isF?"f-datum":"n-datum").value||new Date().toISOString().split("T")[0];
   const dCZ    = dRaw.split("-").reverse().join(".");
-  const jmeno  = document.getElementById(isF?"f-jmeno":"n-jmeno").value||"—";
-  const adresa = document.getElementById(isF?"f-adresa":"n-adresa").value||"—";
+  const jmeno  = document.getElementById(isF?"f-jmeno":"n-jmeno").value||"-";
+  const adresa = document.getElementById(isF?"f-adresa":"n-adresa").value||"-";
   const popis  = document.getElementById(isF?"f-popis":"n-popis").value||"";
   let splCZ="", platba="", ico="", ucet="";
   if (isF) {
     const sr = document.getElementById("f-splatnost").value;
     splCZ = sr ? sr.split("-").reverse().join(".") : "";
-    platba = document.getElementById("f-platba").value;
+    platba = cz(document.getElementById("f-platba").value);
     ico = document.getElementById("f-ico").value;
     ucet = document.getElementById("f-ucet").value;
   }
 
-  drawHdr(doc, cislo, dCZ, typ, PW, L, R);
-  y = 43;
+  pdfHdr(doc, cislo, dCZ, typ, PW, L, R);
+  y = 45;
 
-  // Boxes
-  const bh = isF ? 44 : 32;
-  doc.setFillColor(240,244,251); doc.roundedRect(L,y,W/2-4,bh,2,2,"F");
-  doc.setFillColor(10,36,99); doc.rect(L,y,2,bh,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(10,36,99); doc.text("DODAVATEL",L+5,y+6);
-  doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(26,34,54); doc.text("Stanislav Vařeka",L+5,y+13);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(60,75,110);
-  doc.text("Zahradní 2722/33",L+5,y+19); doc.text("787 01 Šumperk",L+5,y+25);
-  doc.setTextColor(90,106,138); doc.text("IČO: 06411401  ·  Neplátce DPH",L+5,y+31);
-  if (isF&&ucet) doc.text("Účet: "+ucet,L+5,y+38);
+  // ---- DODAVATEL + ODBĚRATEL vedle sebe ----
+  const bw = (W-6)/2;
+  const bh = isF ? 46 : 36;
 
-  const rx=L+W/2+4, rw=W/2-4;
-  doc.setFillColor(240,244,251); doc.roundedRect(rx,y,rw,bh,2,2,"F");
-  doc.setFillColor(isF?26:232,isF?110:71,isF?62:10); doc.rect(rx,y,2,bh,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
-  doc.setTextColor(isF?26:232,isF?110:71,isF?62:10); doc.text("ODBĚRATEL",rx+5,y+6);
-  doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(26,34,54);
-  const jl=doc.splitTextToSize(jmeno,rw-8); doc.text(jl,rx+5,y+13);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(90,106,138);
-  const al=doc.splitTextToSize(adresa,rw-8); doc.text(al,rx+5,y+13+(jl.length*5));
-  if (isF&&ico) doc.text("IČO: "+ico,rx+5,y+36);
-  y += bh+5;
+  // Dodavatel box
+  doc.setFillColor(245,247,252);
+  doc.roundedRect(L, y, bw, bh, 2, 2, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(10,36,99);
+  doc.text("DODAVATEL", L+4, y+7);
+  doc.setDrawColor(10,36,99); doc.setLineWidth(0.4);
+  doc.line(L+4, y+9, L+bw-4, y+9);
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(20,30,50);
+  doc.text("Stanislav Vareka", L+4, y+16);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(60,70,90);
+  doc.text("Zahradni 2722/33", L+4, y+22);
+  doc.text("787 01 Sumperk", L+4, y+28);
+  doc.text("Ceska republika", L+4, y+34);
+  doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(10,36,99);
+  doc.text("ICO: 06411401", L+4, y+41);
+  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,110,130);
+  doc.text("Neplatce DPH", L+4, y+46);
 
-  if (isF&&(splCZ||platba||ucet)) {
-    doc.setFillColor(237,250,240); doc.setDrawColor(106,191,133); doc.setLineWidth(0.3);
-    doc.roundedRect(L,y,W,13,2,2,"FD");
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(26,74,46);
-    if (platba) doc.text("Způsob platby: "+platba,L+4,y+5.5);
-    if (splCZ) doc.text("Splatnost: "+splCZ,L+4,y+11);
-    if (ucet) doc.text("Číslo účtu: "+ucet,L+W/2,y+5.5);
-    y += 19;
-  }
+  // Odběratel box
+  const rx = L+bw+6;
+  doc.setFillColor(245,247,252);
+  doc.roundedRect(rx, y, bw, bh, 2, 2, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(7);
+  doc.setTextColor(isF?26:232, isF?110:71, isF?62:10);
+  doc.text("ODBERATEL", rx+4, y+7);
+  doc.setDrawColor(isF?26:232, isF?110:71, isF?62:10); doc.setLineWidth(0.4);
+  doc.line(rx+4, y+9, rx+bw-4, y+9);
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(20,30,50);
+  const jl = czSplit(doc, jmeno, bw-8);
+  doc.text(jl, rx+4, y+16);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(60,70,90);
+  const al = czSplit(doc, adresa, bw-8);
+  doc.text(al, rx+4, y+16+(jl.length*5.5));
+  if (isF && ico) { doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(10,36,99); doc.text("ICO: "+ico, rx+4, y+41); }
+  y += bh+6;
 
-  if (popis) {
-    const pl=doc.splitTextToSize(popis,W-10); const ph=10+pl.length*4.5;
-    doc.setFillColor(255,248,235); doc.setDrawColor(232,71,10); doc.setLineWidth(0.3);
-    doc.roundedRect(L,y,W,ph,2,2,"FD");
-    doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(232,71,10);
-    doc.text(isF?"POPIS FAKTURACE":"POPIS ZAKÁZKY",L+4,y+6);
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(26,34,54);
-    doc.text(pl,L+4,y+12); y+=ph+6;
-  }
-
-  // Table
-  const C={num:L+2,desc:L+8,unit:R-62,qty:R-47,price:R-25,total:R};
-  const hc=isF?[26,110,62]:[10,36,99];
-  const drawTH=()=>{
-    doc.setFillColor(...hc); doc.roundedRect(L,y,W,8,2,2,"F");
+  // ---- PLATEBNÍ ÚDAJE (jen faktura) ----
+  if (isF && (ucet||platba||splCZ)) {
+    doc.setFillColor(10,36,99);
+    doc.roundedRect(L, y, W, 16, 2, 2, "F");
     doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
-    doc.text("#",C.num,y+5.5);
-    doc.text("Popis práce / položky (vč. materiálu)",C.desc,y+5.5);
-    doc.text("Jedn.",C.unit,y+5.5,{align:"center"});
-    doc.text("Mn.",C.qty,y+5.5,{align:"right"});
-    doc.text("Kč/jedn.",C.price,y+5.5,{align:"right"});
-    doc.text("Celkem",C.total,y+5.5,{align:"right"});
-    y+=10;
+    if (ucet) doc.text("Cislo uctu: "+ucet, L+6, y+7);
+    if (platba) doc.text("Forma uhrady: "+platba, L+6, y+13);
+    if (splCZ) { doc.text("Datum splatnosti: "+splCZ, L+W/2, y+7); }
+    y += 22;
+  }
+
+  // ---- POPIS ----
+  if (popis) {
+    const pl = czSplit(doc, popis, W-10);
+    const ph = 12+pl.length*5;
+    doc.setFillColor(255,248,235); doc.setDrawColor(232,71,10); doc.setLineWidth(0.4);
+    doc.roundedRect(L, y, W, ph, 2, 2, "FD");
+    doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(180,60,0);
+    doc.text(isF?"POPIS FAKTURACE":"POPIS ZAKAZKY", L+5, y+7);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(40,40,40);
+    doc.text(pl, L+5, y+13);
+    y += ph+5;
+  }
+
+  // ---- TABULKA ----
+  const C = {num:L+3, desc:L+10, unit:R-58, qty:R-44, price:R-24, total:R};
+  const hc = isF ? [10,36,99] : [10,36,99];
+
+  const drawTH = () => {
+    doc.setFillColor(...hc);
+    doc.rect(L, y, W, 9, "F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
+    doc.text("Pocet", C.num, y+6);
+    doc.text("Popis", C.desc, y+6);
+    doc.text("Jedn.", C.unit, y+6, {align:"center"});
+    doc.text("Mn.", C.qty, y+6, {align:"right"});
+    doc.text("Kc/jedn.", C.price, y+6, {align:"right"});
+    doc.text("Celkem", C.total, y+6, {align:"right"});
+    y += 11;
   };
   drawTH();
 
-  let suma=0;
-  items.forEach((it,i)=>{
-    const nl=doc.splitTextToSize(it.name,92);
-    const rh=Math.max(8,nl.length*4.8+2);
-    if(y+rh>PH-38){drawFtr(doc,PW,PH);doc.addPage();drawHdr(doc,cislo,dCZ,typ,PW,L,R);y=43;drawTH();}
-    if(i%2===0){doc.setFillColor(it.demo?255:247,it.demo?248:250,it.demo?240:255);doc.rect(L,y-1,W,rh,"F");}
-    doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
-    doc.setTextColor(150,160,180); doc.text(String(i+1),C.num,y+5);
-    doc.setTextColor(it.demo?180:26,it.demo?80:34,it.demo?0:54); doc.text(nl,C.desc,y+5);
-    doc.setTextColor(90,106,138); doc.text(it.unit,C.unit,y+5,{align:"center"});
-    doc.setTextColor(26,34,54); doc.text(String(it.qty).replace(".",","),C.qty,y+5,{align:"right"});
-    doc.text(it.price.toLocaleString("cs-CZ")+" Kč",C.price,y+5,{align:"right"});
+  let suma = 0;
+  items.forEach((it, i) => {
+    const nl = czSplit(doc, it.name, 88);
+    const rh = Math.max(9, nl.length*5+3);
+    if (y+rh > PH-30) {
+      pdfFtr(doc,PW,PH,pageNum); doc.addPage(); pageNum++;
+      pdfHdr(doc,cislo,dCZ,typ,PW,L,R); y=45; drawTH();
+    }
+    // Alternating rows
+    if (i%2===0) { doc.setFillColor(248,250,255); doc.rect(L,y-1,W,rh+1,"F"); }
+    else { doc.setFillColor(255,255,255); doc.rect(L,y-1,W,rh+1,"F"); }
+
+    doc.setFont("helvetica","normal"); doc.setFontSize(8);
+    doc.setTextColor(140,150,170); doc.text(String(i+1), C.num, y+6);
+    doc.setTextColor(it.demo?160:30, it.demo?80:30, it.demo?20:30);
+    doc.text(nl, C.desc, y+6);
+    doc.setTextColor(100,110,130);
+    doc.text(cz(it.unit), C.unit, y+6, {align:"center"});
+    doc.setTextColor(30,30,30);
+    doc.text(String(it.qty).replace(".",","), C.qty, y+6, {align:"right"});
+    doc.text(it.price.toLocaleString("cs-CZ")+" Kc", C.price, y+6, {align:"right"});
     doc.setFont("helvetica","bold"); doc.setTextColor(...hc);
-    doc.text(it.total.toLocaleString("cs-CZ")+" Kč",C.total,y+5,{align:"right"});
-    doc.setDrawColor(220,227,239); doc.setLineWidth(0.15); doc.line(L,y+rh-1,R,y+rh-1);
-    suma+=it.total; y+=rh;
+    doc.text(it.total.toLocaleString("cs-CZ")+" Kc", C.total, y+6, {align:"right"});
+    // Spodní linka řádku
+    doc.setDrawColor(220,225,240); doc.setLineWidth(0.2);
+    doc.line(L, y+rh, R, y+rh);
+    suma += it.total; y += rh;
   });
 
-  y+=5;
-  if(y>PH-52){drawFtr(doc,PW,PH);doc.addPage();drawHdr(doc,cislo,dCZ,typ,PW,L,R);y=43;}
-  doc.setDrawColor(220,227,239); doc.setLineWidth(0.35); doc.line(L,y,R,y); y+=4;
-  doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(90,106,138);
-  doc.text("Mezisoučet (bez DPH, neplátce):",L,y+5);
-  doc.setFont("helvetica","bold"); doc.setTextColor(26,34,54);
-  doc.text(suma.toLocaleString("cs-CZ")+" Kč",R,y+5,{align:"right"}); y+=11;
+  // ---- CELKOVÁ CENA ----
+  y += 5;
+  if (y > PH-50) { pdfFtr(doc,PW,PH,pageNum); doc.addPage(); pageNum++; pdfHdr(doc,cislo,dCZ,typ,PW,L,R); y=45; }
 
-  doc.setFillColor(...hc); doc.roundedRect(R-90,y,90,17,3,3,"F");
-  doc.setFillColor(232,71,10); doc.rect(R-90,y,3,17,"F"); doc.rect(R-88,y,3,17,"F");
-  doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(168,200,232);
-  doc.text(isF?"CELKEM K ÚHRADĚ":"CELKOVÁ CENA NABÍDKY",R-83,y+7);
-  doc.setFontSize(6); doc.text("(neplátce DPH)",R-83,y+13);
-  doc.setFontSize(13); doc.setTextColor(255,255,255);
-  doc.text(suma.toLocaleString("cs-CZ")+" Kč",R-3,y+12,{align:"right"}); y+=24;
+  // Celková cena – velký box vpravo jako ve vzoru
+  doc.setFillColor(10,36,99);
+  doc.roundedRect(R-80, y, 80, 18, 2, 2, "F");
+  doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(168,200,232);
+  doc.text(isF?"Celkem k uhrade":"Celkova cena nabidky", R-76, y+8);
+  doc.setFontSize(12); doc.setTextColor(255,255,255);
+  doc.text(suma.toLocaleString("cs-CZ")+" Kc", R-4, y+14, {align:"right"});
+  y += 24;
 
-  const datObj=new Date(dRaw); datObj.setDate(datObj.getDate()+30);
-  const platCZ=datObj.toLocaleDateString("cs-CZ");
-  const info=isF?[
-    "· Faktura je splatná do "+splCZ+" způsobem: "+platba+".",
-    "· Dodavatel je neplátcem DPH – cena je konečná.",
-    "· Ceny zahrnují práci i materiál dle nabídky.",
-  ]:[
-    "· Nabídka platí 30 dní (do "+platCZ+"). Neplátce DPH – cena konečná.",
-    "· Ceny zahrnují práci i materiál. Svařování není součástí nabídky.",
-    "· Vícepráce budou dohodnuty předem.",
+  // ---- PODMÍNKY ----
+  const datObj = new Date(dRaw); datObj.setDate(datObj.getDate()+30);
+  const platCZ = datObj.toLocaleDateString("cs-CZ");
+  const info = isF ? [
+    "Faktura je splatna do "+splCZ+" ("+platba+").",
+    "Dodavatel je neplatcem DPH - uvedena cena je konecna.",
+    "Ceny zahrnuji praci i material dle cenove nabidky.",
+  ] : [
+    "Nabidka je platna 30 dni od data vystaveni (do "+platCZ+").",
+    "Ceny zahrnuji praci i material. Svarovani neni soucasti nabidky.",
+    "Viceprace budou dohodnuty predem pisemne.",
   ];
-  const ih=9+info.length*5;
-  doc.setFillColor(247,250,255); doc.setDrawColor(168,200,232); doc.setLineWidth(0.25);
-  doc.roundedRect(L,y,W,ih,2,2,"FD");
-  doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(10,36,99);
-  doc.text(isF?"PLATEBNÍ PODMÍNKY":"PODMÍNKY NABÍDKY",L+4,y+6);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(60,75,110);
-  info.forEach((l,i)=>doc.text(l,L+4,y+13+i*5)); y+=ih+8;
+  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,110,130);
+  info.forEach(l => { doc.text(l, L, y); y+=5; });
+  y += 4;
 
-  if(y>PH-30){drawFtr(doc,PW,PH);doc.addPage();y=20;}
-  doc.setFont("helvetica","italic"); doc.setFontSize(7); doc.setTextColor(150,160,180);
-  doc.text("V Šumperku dne "+dCZ,PW/2,y+7,{align:"center"});
-  doc.setDrawColor(10,36,99); doc.setLineWidth(0.4);
-  doc.line(L,y+18,L+66,y+18); doc.line(R-66,y+18,R,y+18);
-  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(90,106,138);
-  doc.text("Stanislav Vařeka – podpis",L,y+23);
-  doc.text("Odběratel – podpis + datum",R-66,y+23);
+  // ---- PODPIS ----
+  if (y > PH-28) { pdfFtr(doc,PW,PH,pageNum); doc.addPage(); pageNum++; y=20; }
+  doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(150,160,180);
+  doc.text("V Sumperku dne "+dCZ, PW/2, y+6, {align:"center"});
+  doc.setDrawColor(150,160,180); doc.setLineWidth(0.4);
+  doc.line(L, y+16, L+60, y+16);
+  doc.line(R-60, y+16, R, y+16);
+  doc.setFontSize(7); doc.setTextColor(100,110,130);
+  doc.text("Stanislav Vareka", L, y+21);
+  doc.text("Odberatel - podpis", R-60, y+21);
 
-  drawFtr(doc,PW,PH);
+  pdfFtr(doc,PW,PH,pageNum);
   const fn=(isF?"Faktura":"Nabidka")+"-"+cislo+"-"+jmeno.replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"")+".pdf";
   doc.save(fn);
-  toast("✓ PDF uloženo: "+fn);
+  toast("✓ PDF ulozeno: "+fn);
 }
 </script>
 </body>
